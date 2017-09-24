@@ -87,7 +87,7 @@ class XropInstruction(object):
         
     def matches_regex(self,regex_str):
         regex=re.compile(regex_str)
-        instr_str="%s   %s" % (self.instruction_op, self.operands)
+        instr_str="%s\t\t%s" % (self.instruction_op, self.operands)
         if(regex.match(instr_str)):
             return True
         else:
