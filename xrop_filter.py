@@ -213,7 +213,12 @@ def parse_args():
 def main():
     args=parse_args()
     xrop_file=args.gadget_file
-    instr_filter_list=args.instruction_skip
+    instr_filter_list=[]
+    if args.instruction_skip:
+        instr_filter_list=args.instruction_skip
+    register_skip=[]
+    if args.register_skip:
+        reg_filter_list=args.register_skip
     reg_filter_list=args.register_skip
     contains_regex=args.contains_regex
     negative_match_regex=args.negative_match_regex
