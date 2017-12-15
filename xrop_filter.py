@@ -19,11 +19,11 @@ class XropInstructionException(Exception):
     def __init__(self,code=0):
         super(self.__class__, self).__init__()
         self.code=code
-        
-        
+
+
 
 class XropInstruction(object):
-    
+
     """
     TODO: need arch-specific instruction classes
     so we can parse out actual instruction ops
@@ -38,7 +38,7 @@ class XropInstruction(object):
         if instruction_line.startswith(self.FIRST_MARKER):
             self.first=True
             instruction_line=instruction_line.lstrip(self.FIRST_MARKER)
-            
+
         addr,instr_bytes,instr=instruction_line.split(None,2)
         instruction_op,operands=self.__parse_instruction(instr)
         self.addr=int(addr,0)
@@ -53,7 +53,7 @@ class XropInstruction(object):
             self.operands=operands
         else:
             self.operands=""
-    
+
     def __parse_instruction(self, instruction):
         """
         TODO: make this smarter. Ideally:
@@ -68,11 +68,11 @@ class XropInstruction(object):
              operand=parts[1]
         instruction_op=parts[0]
         return instruction_op,operand
-    
+
     def __check_instruction_filter(self,instruction_op):
         if instruction_op in self.instruction_filter:
             raise XropInstructionException(code=XropInstructionException.FILTERED_OPERATION)
-    
+
     def __check_register_filte(self,operand_string):
         """
         TODO: Ugh so gross
@@ -83,7 +83,7 @@ class XropInstruction(object):
     def __str__(self):
         mystr="0x%016x\t%-30s\t%s\t\t%s" % (self.addr,self.instr_bytes,self.instruction_op,self.operands)
         return mystr
-        
+
     def matches_regex(self,regex_str):
         regex=re.compile(regex_str)
         instr_str="%s\t\t%s" % (self.instruction_op, self.operands)
@@ -108,7 +108,7 @@ class XropBlock(list):
             self.append(xri)
         if contains_regex and (not match):
             raise XropBlockException(code=XropBlockException.REQUIRED_MATCH_NOT_FOUND)
-        
+
     def __str__(self):
         gadget_str=""
         for instr in self:
@@ -123,7 +123,7 @@ class XropBlock(list):
 class XropList(list):
     SEPERATOR="_______________________________________________________________"
     FIRST_MARKER="> "
-    
+
     def __init__(self,infile,instruction_filter=[],register_filter=[],contains_regex=None,negative_match_regex=None):
         super(self.__class__, self).__init__()
         self.instruction_filter=instruction_filter
@@ -133,7 +133,7 @@ class XropList(list):
         self.total_gadgets=0
         self.filtered_gadgets=0
         self.malformed_gadgets=0
-        
+
         for line in infile.readlines():
             line=line.strip()
             #if we have a list of gadget addresses
@@ -175,7 +175,7 @@ class XropList(list):
                         continue
                     else:
                         raise
-                
+
                 gadget_lines=None
                 self.total_gadgets+=1
                 self.append(xblock)
@@ -184,9 +184,9 @@ class XropList(list):
             if len(line)==0 or line == self.SEPERATOR:
                 samegadget=False
                 continue
-            
+
             #we must have an actual gadget line
-            #we should make a new list if neccessary, 
+            #we should make a new list if neccessary,
             #then add this line to the current gadget's list.
             if not gadget_lines:
                 gadget_lines=[]
@@ -195,8 +195,8 @@ class XropList(list):
 
 
 class InstructionSkipList(list):
-        
-    
+
+
     @classmethod
     def init_from_file(cls,infile):
         instructions=[]
@@ -210,7 +210,7 @@ class InstructionSkipList(list):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Filter xrop gadgets')
-    parser.add_argument("gadget_file",type=str,nargs=argparse.REMAINDER,help="Input file of xrop-formatted gadgets.")
+    parser.add_argument("gadget_file",type=str,nargs=argparse.REMAINDER,help="Input file of xrop-formatted gadgets. Specify '--' to read from standard input, e.g., when piping one instance into another.")
     parser.add_argument("--instruction-skip-file",type=str,help="File containing a list of instructions to skip.")
     parser.add_argument("--instruction-skip",type=str,action='append',help="Exclude gadgets containing this instruction. You may specify this option multiple times.")
     parser.add_argument("--register-skip",type=str,action='append',help="Exclude gadgets referencing this register. You may specify this option multiple times.")
@@ -219,9 +219,9 @@ def parse_args():
 
     args = parser.parse_args()
     return args
-    
-    
-    
+
+
+
 
 def main():
     args=parse_args()
@@ -231,14 +231,14 @@ def main():
         xrop_file=sys.stdin
     else:
         xrop_file=open(xrop_filename,"rb")
-    
+
     instr_filter_list=[]
     if args.instruction_skip:
         instr_filter_list=args.instruction_skip
     if args.instruction_skip_file:
         skiplist=InstructionSkipList.init_from_file(args.instruction_skip_file)
         instr_filter_list.extend(skiplist)
-    
+
     register_skip=[]
     if args.register_skip:
         reg_filter_list=args.register_skip
@@ -266,5 +266,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-        
-        
