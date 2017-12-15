@@ -38,17 +38,15 @@ class XropInstruction(object):
         if instruction_line.startswith(self.FIRST_MARKER):
             self.first=True
             instruction_line=instruction_line.lstrip(self.FIRST_MARKER)
+            
         addr,instr_bytes,instr=instruction_line.split(None,2)
         instruction_op,operands=self.__parse_instruction(instr)
         self.addr=int(addr,0)
         #I think ideally we'd be turnning this into a binary string
         #Containing the literal bytes
         # print ("%s\t%s" % (addr,instr_bytes))
-        try:
-            self.instr_bytes=int(instr_bytes,16)
-        except ValueError:
-            #print "malformed instruction at %s" % addr
-            raise 
+
+        self.instr_bytes=instr_bytes
         self.__check_instruction_filter(instruction_op)
         self.instruction_op=instruction_op
         if operands:
@@ -83,7 +81,8 @@ class XropInstruction(object):
             if reg in self.operand_string:
                 raise XropInstructionException(code=FILTERED_REGISTER)
     def __str__(self):
-        return "%016x\t%s\t\t%s" % (self.addr,self.instruction_op,self.operands)
+        mystr="0x%016x\t%-30s\t%s\t\t%s" % (self.addr,self.instr_bytes,self.instruction_op,self.operands)
+        return mystr
         
     def matches_regex(self,regex_str):
         regex=re.compile(regex_str)
@@ -111,17 +110,21 @@ class XropBlock(list):
             raise XropBlockException(code=XropBlockException.REQUIRED_MATCH_NOT_FOUND)
         
     def __str__(self):
-        gadget_str=XropList.SEPERATOR+"\n"
+        gadget_str=""
         for instr in self:
             gadget_str+=("%s\n" % instr)
-        return gadget_str        
+        gadget_str+=XropList.SEPERATOR+"\n"
+        return gadget_str
+
+
+
 
 
 class XropList(list):
     SEPERATOR="_______________________________________________________________"
     FIRST_MARKER="> "
     
-    def __init__(self,inputfile,instruction_filter=[],register_filter=[],contains_regex=None,negative_match_regex=None):
+    def __init__(self,infile,instruction_filter=[],register_filter=[],contains_regex=None,negative_match_regex=None):
         super(self.__class__, self).__init__()
         self.instruction_filter=instruction_filter
         self.register_filter=register_filter
@@ -131,79 +134,89 @@ class XropList(list):
         self.filtered_gadgets=0
         self.malformed_gadgets=0
         
-        with open(inputfile,"rb") as infile:
-            for line in infile.readlines():
-                line=line.strip()
-                #if we have a list of gadget addresses
-                # and the previous line was one of the separators
-                # we need to construct an xrop gadget block
-                # from what we have
-                if gadget_lines and not samegadget:
-                    try:
-                        # print line
-                        # print gadget_lines
-                        xblock=XropBlock(gadget_lines,
-                                            instruction_filter=self.instruction_filter,
-                                            register_filter=self.register_filter,contains_regex=contains_regex,negative_match_regex=negative_match_regex)
-                    except ValueError as ve:
-                        # print ve
-                        # print ("Skipping malformed gadget block.")
-                        gadget_lines=None
-                        self.malformed_gadgets+=1
-                        continue
-                    except XropInstructionException as xie:
-                        if xie.code==XropInstructionException.FILTERED_OPERATION:
-                            #print("Skipping filtered instruciton")
-                            gadget_lines=None
-                            self.filtered_gadgets+=1
-                            self.total_gadgets+=1
-                            continue
-                        else:
-                            raise
-                    except XropBlockException as xbe:
-                        if xbe.code==XropBlockException.REQUIRED_MATCH_NOT_FOUND:
-                            #Skip gadget block lacking required match
-                            gadget_lines=None
-                            self.filtered_gadgets+=1
-                            self.total_gadgets+=1
-                            continue
-                        if xbe.code==XropBlockException.NEGATIVE_MATCH_FOUND:
-                            #Skip gadget block containing prohibited pattern
-                            gadget_lines=None
-                            self.filtered_gadgets+=1
-                            self.total_gadgets+=1
-                            continue
-                        else:
-                            raise
-                    
+        for line in infile.readlines():
+            line=line.strip()
+            #if we have a list of gadget addresses
+            # and the previous line was one of the separators
+            # we need to construct an xrop gadget block
+            # from what we have
+            if gadget_lines and not samegadget:
+                try:
+                    # print line
+                    # print gadget_lines
+                    xblock=XropBlock(gadget_lines,
+                                        instruction_filter=self.instruction_filter,
+                                        register_filter=self.register_filter,contains_regex=contains_regex,negative_match_regex=negative_match_regex)
+                except ValueError as ve:
                     gadget_lines=None
-                    self.total_gadgets+=1
-                    self.append(xblock)
-                #If this line is one of the separators
-                #We've reached the end of a gadget block
-                if len(line)==0 or line == self.SEPERATOR:
-                    samegadget=False
+                    self.malformed_gadgets+=1
                     continue
+                except XropInstructionException as xie:
+                    if xie.code==XropInstructionException.FILTERED_OPERATION:
+                        #print("Skipping filtered instruciton")
+                        gadget_lines=None
+                        self.filtered_gadgets+=1
+                        self.total_gadgets+=1
+                        continue
+                    else:
+                        raise
+                except XropBlockException as xbe:
+                    if xbe.code==XropBlockException.REQUIRED_MATCH_NOT_FOUND:
+                        #Skip gadget block lacking required match
+                        gadget_lines=None
+                        self.filtered_gadgets+=1
+                        self.total_gadgets+=1
+                        continue
+                    if xbe.code==XropBlockException.NEGATIVE_MATCH_FOUND:
+                        #Skip gadget block containing prohibited pattern
+                        gadget_lines=None
+                        self.filtered_gadgets+=1
+                        self.total_gadgets+=1
+                        continue
+                    else:
+                        raise
                 
-                #we must have an actual gadget line
-                #we should make a new list if neccessary, 
-                #then add this line to the current gadget's list.
-                if not gadget_lines:
-                    gadget_lines=[]
-                    samegadget=True
-                gadget_lines.append(line)
+                gadget_lines=None
+                self.total_gadgets+=1
+                self.append(xblock)
+            #If this line is one of the separators
+            #We've reached the end of a gadget block
+            if len(line)==0 or line == self.SEPERATOR:
+                samegadget=False
+                continue
+            
+            #we must have an actual gadget line
+            #we should make a new list if neccessary, 
+            #then add this line to the current gadget's list.
+            if not gadget_lines:
+                gadget_lines=[]
+                samegadget=True
+            gadget_lines.append(line)
 
 
+class InstructionSkipList(list):
         
+    
+    @classmethod
+    def init_from_file(cls,infile):
+        instructions=[]
+        with open(infile) as f:
+            for line in f.readlines():
+                line=line.rstrip()
+                if not line == "":
+                    instructions.append(line)
+        return cls(instructions)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Filter xrop gadgets')
-    parser.add_argument("gadget_file",type=str,help="Input file of xrop-formatted gadgets.")
+    parser.add_argument("gadget_file",type=str,nargs=argparse.REMAINDER,help="Input file of xrop-formatted gadgets.")
+    parser.add_argument("--instruction-skip-file",type=str,help="File containing a list of instructions to skip.")
     parser.add_argument("--instruction-skip",type=str,action='append',help="Exclude gadgets containing this instruction. You may specify this option multiple times.")
     parser.add_argument("--register-skip",type=str,action='append',help="Exclude gadgets referencing this register. You may specify this option multiple times.")
     parser.add_argument("--contains-regex",type=str,help="Gadget must contain an instruction matching this perl-compatible regex.")
     parser.add_argument("--negative-match-regex",type=str,help="Instructions matching this perl-compatible regex are prohibited.")
+
     args = parser.parse_args()
     return args
     
@@ -212,10 +225,20 @@ def parse_args():
 
 def main():
     args=parse_args()
-    xrop_file=args.gadget_file
+    xrop_filename=args.gadget_file[0]
+    print xrop_filename
+    if xrop_filename == "--":
+        xrop_file=sys.stdin
+    else:
+        xrop_file=open(xrop_filename,"rb")
+    
     instr_filter_list=[]
     if args.instruction_skip:
         instr_filter_list=args.instruction_skip
+    if args.instruction_skip_file:
+        skiplist=InstructionSkipList.init_from_file(args.instruction_skip_file)
+        instr_filter_list.extend(skiplist)
+    
     register_skip=[]
     if args.register_skip:
         reg_filter_list=args.register_skip
@@ -223,6 +246,7 @@ def main():
     contains_regex=args.contains_regex
     negative_match_regex=args.negative_match_regex
     print negative_match_regex
+    print instr_filter_list
     xrop_list=XropList(xrop_file,instruction_filter=instr_filter_list,contains_regex=contains_regex,negative_match_regex=negative_match_regex)
     if instr_filter_list:
         print("Prohibited instructions: %s"%str(instr_filter_list))
@@ -236,6 +260,7 @@ def main():
     print("Gadgets filtered out: %d" % xrop_list.filtered_gadgets)
     print("Malformed gadgets: %d" % xrop_list.malformed_gadgets)
     print("Matching gadgets found: %d" % len(xrop_list))
+    print XropList.SEPERATOR
     for rop in xrop_list:
         print rop
 
